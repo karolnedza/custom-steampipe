@@ -61,6 +61,8 @@ control "wafv2_web_acl_logging_enabled" {
     EOQ
   }
   
+
+  
   benchmark "bpost_custom" {
     title       = "1.1.1 WAF deployed on public facing ALB"
     description = "WAF deployed on public facing ALB"
@@ -68,5 +70,27 @@ control "wafv2_web_acl_logging_enabled" {
       control.wafv2_web_acl_resource_attached,
       control.wafv2_web_acl_logging_enabled
 
-    ]
+    ] 
+ }
+
+query "wafv2_web_acl_resource_attached" {
+    sql = <<-EOQ
+
+    select
+    arn as resource,
+    case
+      when jsonb_array_length(associated_resources) > 0 then 'ok'
+      else 'alarm'
+    end as status,
+    case
+      when jsonb_array_length(associated_resources) > 0 then title || ' has associated resources.'
+      else title || ' has no instances registered.'
+    end as reason,
+    region,
+    account_id
+  from
+    aws_wafv2_web_acl;
+
+    EOQ
   }
+
