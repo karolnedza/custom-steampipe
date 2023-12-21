@@ -61,14 +61,45 @@ control "wafv2_web_acl_logging_enabled" {
     EOQ
   }
   
+  query "alb_attached_to_waf" {
+    sql = <<-EOQ
+    with wafv2_with_alb as (
+      select
+        jsonb_array_elements_text(waf.associated_resources) as arn
+      from
+        aws_wafv2_web_acl as waf
+    )
+      select alb.arn as resource, 
+      case 
+        when alb.arn =  temp.arn then 'ok'
+      else 'alarm'
+      end as status,
+      case 
+        when alb.arn =  temp.arn then title || ' has associated WAF'
+        else title || ' is not associated to WAF.'
+      end as reason,
+      region,
+      account_id
 
+    from aws_ec2_application_load_balancer as alb
+      left join wafv2_with_alb  as temp on alb.arn =  temp.arn;
+    EOQ
+  }
+
+
+  control "alb_attached_to_waf" { 
+    title       = "Public facing ALB are protected by AWS Web Application Firewall v2 (AWS WAFv2)"
+    description = "Ensure public facing ALB are protected by AWS Web Application Firewall v2 "
+    query       = query.alb_attached_to_waf
+    }
   
   benchmark "bpost_custom" {
-    title       = "1.1.1 WAF deployed on public facing ALB"
-    description = "WAF deployed on public facing ALB"
+    title       = "Public facing ALB Architecture"
+    description = "Ensure public facing ALB are protected by AWS Web Application Firewall v2"
     children = [
-      control.wafv2_web_acl_resource_attached,
-      control.wafv2_web_acl_logging_enabled
+      control.wafv2_web_acl_logging_enabled,
+      control.alb_attached_to_waf,
+      control.wafv2_web_acl_resource_attached
 
     ] 
  }
