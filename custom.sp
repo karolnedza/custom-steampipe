@@ -86,7 +86,8 @@ from
       account_id
 
     from aws_ec2_application_load_balancer as alb
-      left join wafv2_with_alb  as temp on alb.arn =  temp.arn;
+      left join wafv2_with_alb  as temp on alb.arn =  temp.arn
+     where "scheme" = 'internet-facing'
     EOQ
   }
 
@@ -137,6 +138,5 @@ query "rds_db_instance_multiple_az_enabled" {
       control.alb_attached_to_waf,
       control.wafv2_web_acl_rule_attached,
       control.rds_db_instance_multiple_az_enabled
-
     ] 
  }
