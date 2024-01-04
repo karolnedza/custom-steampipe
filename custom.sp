@@ -87,7 +87,8 @@ from
 
     from aws_ec2_application_load_balancer as alb
       left join wafv2_with_alb  as temp on alb.arn =  temp.arn
-     where "scheme" = 'internet-facing';
+    where "scheme" = 'internet-facing';
+    EOQ
   }
 
 
@@ -97,45 +98,13 @@ from
     query       = query.alb_attached_to_waf
     }
   
-
-
-control "rds_db_instance_multiple_az_enabled" {
-    title       = "RDS DB instance multiple az should be enabled"
-    description = "Multi-AZ support in AWS Relational Database Service (AWS RDS) provides enhanced availability and durability for database instances."
-    query       = query.rds_db_instance_multiple_az_enabled
-  }
-  
-query "rds_db_instance_multiple_az_enabled" {
-    sql = <<-EOQ
-      select
-  arn as resource,
-  case
-    when engine ilike any (array [ '%aurora-mysql%', '%aurora-postgres%' ]) then 'skip'
-    when multi_az then 'ok'
-    else 'alarm'
-  end as status,
-  case
-    when engine ilike any (array [ '%aurora-mysql%', '%aurora-postgres%' ]) then title || ' cluster instance.'
-    when multi_az then title || ' Multi-AZ enabled.'
-    else title || ' Multi-AZ disabled.'
-  end as reason,
-  region,
-  account_id
-  from
-  aws_rds_db_instance;
-    EOQ
-  }
-  
-
-
-  
   benchmark "bpost_custom" {
-    title       = "Public facing ALB Architecture"
-    description = "Ensure public facing ALB are protected by AWS Web Application Firewall v2"
+    title       = "Bpost Architecture"
+    description = "Bpost Architecture"
     children = [
       control.wafv2_web_acl_logging_enabled,
       control.alb_attached_to_waf,
-      control.wafv2_web_acl_rule_attached,
-      control.rds_db_instance_multiple_az_enabled
+      control.wafv2_web_acl_rule_attached 
+
     ] 
  }
