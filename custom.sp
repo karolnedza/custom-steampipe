@@ -87,8 +87,7 @@ from
 
     from aws_ec2_application_load_balancer as alb
       left join wafv2_with_alb  as temp on alb.arn =  temp.arn
-     where "scheme" = 'internet-facing'
-    EOQ
+     where "scheme" = 'internet-facing';
   }
 
 
