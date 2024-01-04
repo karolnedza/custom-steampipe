@@ -22,10 +22,10 @@ control "wafv2_web_acl_logging_enabled" {
   }
   
   
-  control "wafv2_web_acl_resource_attached" {
-    title       = "A WAFV2 web ACL should have at least one resource attached"
-    description = "This control checks whether a WAFV2 web access control list (web ACL) contains at least one resource attached. The control fails if a web ACL does not contain any resource attached."
-    query       = query.wafv2_web_acl_resource_attached
+  control "wafv2_web_acl_rule_attached" {
+    title       = "A WAFV2 web ACL should have at least one rule or rule group"
+    description = "This control checks whether a WAFV2 web access control list (web ACL) contains at least one WAF rule or WAF rule group. The control fails if a web ACL does not contain any WAF rules or rule groups."
+    query       = query.wafv2_web_acl_rule_attached
     }
   
   
@@ -33,31 +33,35 @@ control "wafv2_web_acl_logging_enabled" {
   
   query "wafv2_web_acl_rule_attached" {
     sql = <<-EOQ
-      with rule_group_count as (
-        select
-          arn,
-          count(*) as rule_group_count
-        from
-          aws_wafv2_web_acl,
-          jsonb_array_elements(rules) as r
-        where
-          r -> 'Statement' -> 'RuleGroupReferenceStatement' ->> 'ARN' is not null
-        group by
-          arn
-      )
-      select
-        a.arn as resource,
-        case
-          when rules is null or jsonb_array_length(rules) = 0 then 'alarm'
-          else 'ok'
-        end as status,
-        case
-          when rules is null or jsonb_array_length(rules) = 0 then title || ' has no attached rules.'
-          else title || ' has ' || c.rule_group_count || ' rule group(s) and ' || (jsonb_array_length(rules) - c.rule_group_count) || ' rule(s) attached.'
-        end as reason
-      from
-        aws_wafv2_web_acl as a
-        left join rule_group_count as c on c.arn = a.arn;
+with rule_group_count as (
+  select
+    arn,
+    count(*) as rule_group_count
+  from
+    aws_wafv2_web_acl,
+    jsonb_array_elements(rules) as r
+  where
+    r -> 'Statement' -> 'RuleGroupReferenceStatement' ->> 'ARN' is not null
+  group by
+    arn
+)
+select
+  a.arn as resource,
+  case
+    when rules is null
+    or jsonb_array_length(rules) = 0 then 'alarm'
+    else 'ok'
+  end as status,
+  case
+    when rules is null
+    or jsonb_array_length(rules) = 0 then title || ' has no attached rules.'
+    else title || ' has ' || c.rule_group_count || ' rule group(s) and ' || (jsonb_array_length(rules) - c.rule_group_count) || ' rule(s) attached.'
+  end as reason,
+  region,
+  account_id
+from
+  aws_wafv2_web_acl as a
+  left join rule_group_count as c on c.arn = a.arn;
     EOQ
   }
   
@@ -76,7 +80,7 @@ control "wafv2_web_acl_logging_enabled" {
       end as status,
       case 
         when alb.arn =  temp.arn then title || ' has associated WAF'
-        else title || ' is not associated to WAF.'
+        else title || ' is not associated with WAF.'
       end as reason,
       region,
       account_id
@@ -93,35 +97,46 @@ control "wafv2_web_acl_logging_enabled" {
     query       = query.alb_attached_to_waf
     }
   
+
+
+control "rds_db_instance_multiple_az_enabled" {
+    title       = "RDS DB instance multiple az should be enabled"
+    description = "Multi-AZ support in AWS Relational Database Service (AWS RDS) provides enhanced availability and durability for database instances."
+    query       = query.rds_db_instance_multiple_az_enabled
+  }
+  
+query "rds_db_instance_multiple_az_enabled" {
+    sql = <<-EOQ
+      select
+  arn as resource,
+  case
+    when engine ilike any (array [ '%aurora-mysql%', '%aurora-postgres%' ]) then 'skip'
+    when multi_az then 'ok'
+    else 'alarm'
+  end as status,
+  case
+    when engine ilike any (array [ '%aurora-mysql%', '%aurora-postgres%' ]) then title || ' cluster instance.'
+    when multi_az then title || ' Multi-AZ enabled.'
+    else title || ' Multi-AZ disabled.'
+  end as reason,
+  region,
+  account_id
+  from
+  aws_rds_db_instance;
+    EOQ
+  }
+  
+
+
+  
   benchmark "bpost_custom" {
     title       = "Public facing ALB Architecture"
     description = "Ensure public facing ALB are protected by AWS Web Application Firewall v2"
     children = [
       control.wafv2_web_acl_logging_enabled,
       control.alb_attached_to_waf,
-      control.wafv2_web_acl_resource_attached
+      control.wafv2_web_acl_rule_attached,
+      control.rds_db_instance_multiple_az_enabled
 
     ] 
  }
-
-query "wafv2_web_acl_resource_attached" {
-    sql = <<-EOQ
-
-    select
-    arn as resource,
-    case
-      when jsonb_array_length(associated_resources) > 0 then 'ok'
-      else 'alarm'
-    end as status,
-    case
-      when jsonb_array_length(associated_resources) > 0 then title || ' has associated resources.'
-      else title || ' has no instances registered.'
-    end as reason,
-    region,
-    account_id
-  from
-    aws_wafv2_web_acl;
-
-    EOQ
-  }
-
